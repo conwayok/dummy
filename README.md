@@ -15,7 +15,7 @@ docker run --rm -d -p 9999:9999 conwayok/dummy:latest
 - any HTTP request method is accepted, e.g., GET, POST, PUT, PATCH, DELETE...
 - any /request/path/or?query=parameters&are=accepted
 - any JSON request body
-- request header ```X-Dummy-Response-Code``` can be used to set the response code
+- request header ```X-Dummy-Response-Code``` can be used to set the http response code
 - request header ```X-Dummy-Sleep``` can make the server wait for specified amount of milliseconds before sending response
 
 For example:
