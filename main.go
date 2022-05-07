@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
+	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -49,7 +50,8 @@ func init() {
 		fmt.Printf("error %s", err)
 	}
 	log.SetFormatter(&log.JSONFormatter{})
-	log.SetOutput(logFileHandler)
+	mw := io.MultiWriter(os.Stdout, logFileHandler)
+	log.SetOutput(mw)
 	log.SetLevel(log.InfoLevel)
 }
 
