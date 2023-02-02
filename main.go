@@ -6,7 +6,6 @@ import (
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
@@ -44,7 +43,7 @@ type NetworkInterfaceInfo struct {
 }
 
 func init() {
-	_ = os.MkdirAll("logs", os.ModeDir)
+	_ = os.MkdirAll("logs", 0755)
 	logFileHandler, err := os.OpenFile("logs/dummy.log", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0755)
 	if err != nil {
 		fmt.Printf("error %s", err)
@@ -99,7 +98,7 @@ func main() {
 	engine.Any("/*all", func(context *gin.Context) {
 
 		var reqBody map[string]interface{} = nil
-		all, _ := ioutil.ReadAll(context.Request.Body)
+		all, _ := io.ReadAll(context.Request.Body)
 		if len(all) > 0 {
 			reqBody = make(map[string]interface{})
 			_ = json.Unmarshal(all, &reqBody)
