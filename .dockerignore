@@ -1,4 +1,5 @@
 .idea
+.github
 .gitignore
 logs
 README.md
