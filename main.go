@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
 	"io"
 	"net"
@@ -54,99 +53,82 @@ func init() {
 	log.SetLevel(log.InfoLevel)
 }
 
-func main() {
-
-	configuredAppName := os.Getenv("DUMMY_APP_NAME")
-	if configuredAppName != "" {
-		AppName = configuredAppName
-	}
-
-	configuredPort := os.Getenv("DUMMY_HTTP_PORT")
-
-	if configuredPort != "" {
-		port, err := strconv.Atoi(configuredPort)
-
-		if err != nil {
-			log.Fatal(err)
-		}
-		if port < 1 || port > 65535 {
-			log.Fatal("port out of range")
-		}
-
-		AppPort = port
-	}
-
-	log.Info("start")
-
+func handler(w http.ResponseWriter, r *http.Request) {
 	hostname, _ := os.Hostname()
 	hostNetworkInterfaces, _ := net.Interfaces()
 	interfaceInfos := make([]NetworkInterfaceInfo, 0)
 	for _, i := range hostNetworkInterfaces {
-
 		addresses, _ := i.Addrs()
-
-		n := NetworkInterfaceInfo{
+		interfaceInfos = append(interfaceInfos, NetworkInterfaceInfo{
 			Name:      i.Name,
 			Addresses: addresses,
-		}
-
-		interfaceInfos = append(interfaceInfos, n)
+		})
 	}
 
-	engine := gin.Default()
+	var reqBody map[string]interface{}
+	body, _ := io.ReadAll(r.Body)
+	if len(body) > 0 {
+		reqBody = make(map[string]interface{})
+		_ = json.Unmarshal(body, &reqBody)
+	}
 
-	engine.Any("/*all", func(context *gin.Context) {
+	res := DummyResponse{
+		Code:              Ok,
+		Message:           "success",
+		UnixTimestamp:     time.Now().UnixMilli(),
+		HostName:          hostname,
+		SourceIp:          r.RemoteAddr,
+		AppName:           AppName,
+		RequestMethod:     r.Method,
+		RequestUrl:        r.RequestURI,
+		RequestHeaders:    r.Header,
+		RequestBody:       reqBody,
+		ServerNetworkInfo: interfaceInfos,
+	}
 
-		var reqBody map[string]interface{} = nil
-		all, _ := io.ReadAll(context.Request.Body)
-		if len(all) > 0 {
-			reqBody = make(map[string]interface{})
-			_ = json.Unmarshal(all, &reqBody)
+	responseCode := 200
+	if responseCodeOption := r.Header.Get(DummyResponseCodeHeaderKey); responseCodeOption != "" {
+		if parsed, err := strconv.Atoi(responseCodeOption); err == nil && parsed >= 100 && parsed <= 599 {
+			responseCode = parsed
+		} else {
+			res.Code = HeaderInvalid
+			res.Message = fmt.Sprintf("%s header invalid", DummyResponseCodeHeaderKey)
 		}
+	}
 
-		res := DummyResponse{
-			Code:              Ok,
-			Message:           "success",
-			UnixTimestamp:     time.Now().UnixMilli(),
-			HostName:          hostname,
-			SourceIp:          context.ClientIP(),
-			AppName:           AppName,
-			RequestMethod:     context.Request.Method,
-			RequestUrl:        context.Request.RequestURI,
-			RequestHeaders:    context.Request.Header,
-			RequestBody:       reqBody,
-			ServerNetworkInfo: interfaceInfos,
+	if sleepOption := r.Header.Get(DummySleepHeaderKey); sleepOption != "" {
+		if parsed, err := strconv.Atoi(sleepOption); err == nil && parsed > 0 {
+			time.Sleep(time.Duration(parsed) * time.Millisecond)
+		} else {
+			res.Code = HeaderInvalid
+			res.Message = fmt.Sprintf("%s header invalid", DummySleepHeaderKey)
 		}
+	}
 
-		responseCode := 200
-		responseCodeOption := context.Request.Header.Get(DummyResponseCodeHeaderKey)
-		if responseCodeOption != "" {
-			parsed, err := strconv.Atoi(responseCodeOption)
-			if err != nil || parsed < 100 || parsed > 599 {
-				res.Code = HeaderInvalid
-				res.Message = fmt.Sprintf("%s header invalid", DummyResponseCodeHeaderKey)
-			} else {
-				responseCode = parsed
-			}
+	log.WithFields(log.Fields{"json": &res}).Info("received request")
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(responseCode)
+	_ = json.NewEncoder(w).Encode(res)
+}
+
+func main() {
+	if configuredAppName := os.Getenv("DUMMY_APP_NAME"); configuredAppName != "" {
+		AppName = configuredAppName
+	}
+
+	if configuredPort := os.Getenv("DUMMY_HTTP_PORT"); configuredPort != "" {
+		if port, err := strconv.Atoi(configuredPort); err == nil && port > 0 && port <= 65535 {
+			AppPort = port
+		} else {
+			log.Fatal("port out of range")
 		}
+	}
 
-		sleepOption := context.Request.Header.Get(DummySleepHeaderKey)
-		if sleepOption != "" {
-			parsed, err := strconv.Atoi(sleepOption)
-			if err != nil || parsed < 1 {
-				res.Code = HeaderInvalid
-				res.Message = fmt.Sprintf("%s header invalid", DummyResponseCodeHeaderKey)
-			} else {
-				time.Sleep(time.Duration(parsed) * time.Millisecond)
-			}
-		}
+	http.HandleFunc("/", handler)
 
-		log.WithFields(log.Fields{
-			"json": &res,
-		}).Info("received request")
-
-		context.JSON(responseCode, res)
-	})
-
-	_ = engine.Run(fmt.Sprintf(":%d", AppPort))
+	log.Infof("Starting server on :%d", AppPort)
+	if err := http.ListenAndServe(fmt.Sprintf(":%d", AppPort), nil); err != nil {
+		log.Fatal(err)
+	}
 }
