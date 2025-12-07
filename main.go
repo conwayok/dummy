@@ -28,7 +28,7 @@ type DummyResponse struct {
 	Message           string                 `json:"message"`
 	HostName          string                 `json:"host_name"`
 	AppName           string                 `json:"app_name"`
-	UnixTimestamp     int64                  `json:"unix_timestamp"`
+	UnixTsMs          int64                  `json:"unix_ts_ms"`
 	SourceIp          string                 `json:"source_ip"`
 	RequestMethod     string                 `json:"request_method"`
 	RequestUrl        string                 `json:"request_url"`
@@ -76,7 +76,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	res := DummyResponse{
 		Code:              Ok,
 		Message:           "success",
-		UnixTimestamp:     time.Now().UnixMilli(),
+		UnixTsMs:          time.Now().UnixMilli(),
 		HostName:          hostname,
 		SourceIp:          r.RemoteAddr,
 		AppName:           AppName,
