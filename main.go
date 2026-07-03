@@ -140,6 +140,8 @@ func main() {
 	if safeModeEnv := os.Getenv("DUMMY_SAFE_MODE"); safeModeEnv != "" {
 		if safeModeEnv == "false" {
 			SafeMode = false
+		} else if safeModeEnv == "true" {
+			SafeMode = true
 		} else {
 			slog.Warn("invalid value for DUMMY_SAFE_MODE, defaulting to true")
 		}
