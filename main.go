@@ -14,6 +14,7 @@ import (
 
 var AppName = "default-name"
 var AppPort = 9999
+var SafeMode = true
 
 type Code string
 
@@ -30,15 +31,15 @@ const (
 type DummyResponse struct {
 	Code              Code                   `json:"code"`
 	Message           string                 `json:"message"`
-	HostName          string                 `json:"host_name"`
+	HostName          string                 `json:"host_name,omitempty"`
 	AppName           string                 `json:"app_name"`
 	UnixTsMs          int64                  `json:"unix_ts_ms"`
-	SourceIp          string                 `json:"source_ip"`
-	RequestMethod     string                 `json:"request_method"`
-	RequestUrl        string                 `json:"request_url"`
-	RequestHeaders    http.Header            `json:"request_headers"`
-	RequestBody       map[string]interface{} `json:"request_body"`
-	ServerNetworkInfo []NetworkInterfaceInfo `json:"server_network_info"`
+	SourceIp          string                 `json:"source_ip,omitempty"`
+	RequestMethod     string                 `json:"request_method,omitempty"`
+	RequestUrl        string                 `json:"request_url,omitempty"`
+	RequestHeaders    http.Header            `json:"request_headers,omitempty"`
+	RequestBody       map[string]interface{} `json:"request_body,omitempty"`
+	ServerNetworkInfo []NetworkInterfaceInfo `json:"server_network_info,omitempty"`
 }
 
 type NetworkInterfaceInfo struct {
@@ -46,44 +47,49 @@ type NetworkInterfaceInfo struct {
 	Addresses []net.Addr `json:"addresses"`
 }
 
-func init() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	}))
-	slog.SetDefault(logger)
-}
-
 func handler(w http.ResponseWriter, r *http.Request) {
-	hostname, _ := os.Hostname()
-	hostNetworkInterfaces, _ := net.Interfaces()
-	interfaceInfos := make([]NetworkInterfaceInfo, 0)
-	for _, i := range hostNetworkInterfaces {
-		addresses, _ := i.Addrs()
-		interfaceInfos = append(interfaceInfos, NetworkInterfaceInfo{
-			Name:      i.Name,
-			Addresses: addresses,
-		})
-	}
+	var res DummyResponse
 
-	var reqBody map[string]interface{}
-	body, _ := io.ReadAll(r.Body)
-	if len(body) > 0 {
-		reqBody = make(map[string]interface{})
-		_ = json.Unmarshal(body, &reqBody)
-	}
+	if SafeMode {
+		res = DummyResponse{
+			Code:     CodeOk,
+			Message:  "success",
+			UnixTsMs: time.Now().UnixMilli(),
+			AppName:  AppName,
+		}
+	} else {
+		hostname, _ := os.Hostname()
+		hostNetworkInterfaces, _ := net.Interfaces()
+		var interfaceInfos []NetworkInterfaceInfo
 
-	res := DummyResponse{
-		Code:              CodeOk,
-		Message:           "success",
-		UnixTsMs:          time.Now().UnixMilli(),
-		HostName:          hostname,
-		SourceIp:          r.RemoteAddr,
-		AppName:           AppName,
-		RequestMethod:     r.Method,
-		RequestUrl:        r.RequestURI,
-		RequestHeaders:    r.Header,
-		RequestBody:       reqBody,
-		ServerNetworkInfo: interfaceInfos,
+		for _, i := range hostNetworkInterfaces {
+			addresses, _ := i.Addrs()
+			interfaceInfos = append(interfaceInfos, NetworkInterfaceInfo{
+				Name:      i.Name,
+				Addresses: addresses,
+			})
+		}
+
+		var reqBody map[string]interface{}
+		body, _ := io.ReadAll(r.Body)
+		if len(body) > 0 {
+			reqBody = make(map[string]interface{})
+			_ = json.Unmarshal(body, &reqBody)
+		}
+
+		res = DummyResponse{
+			Code:              CodeOk,
+			Message:           "success",
+			UnixTsMs:          time.Now().UnixMilli(),
+			HostName:          hostname,
+			SourceIp:          r.RemoteAddr,
+			AppName:           AppName,
+			RequestMethod:     r.Method,
+			RequestUrl:        r.RequestURI,
+			RequestHeaders:    r.Header,
+			RequestBody:       reqBody,
+			ServerNetworkInfo: interfaceInfos,
+		}
 	}
 
 	responseCode := 200
@@ -105,7 +111,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	slog.Info("received request", "data", res)
+	slog.Info("handle request", "data", res)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(responseCode)
@@ -113,6 +119,11 @@ func handler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	}))
+	slog.SetDefault(logger)
+
 	if configuredAppName := os.Getenv("DUMMY_APP_NAME"); configuredAppName != "" {
 		AppName = configuredAppName
 	}
@@ -126,9 +137,17 @@ func main() {
 		}
 	}
 
+	if safeModeEnv := os.Getenv("DUMMY_SAFE_MODE"); safeModeEnv != "" {
+		if safeModeEnv == "false" {
+			SafeMode = false
+		} else {
+			slog.Warn("invalid value for DUMMY_SAFE_MODE, defaulting to true")
+		}
+	}
+
 	http.HandleFunc("/", handler)
 
-	slog.Info("server started", "port", AppPort)
+	slog.Info("server started", "port", AppPort, "app_name", AppName, "safe_mode", SafeMode)
 
 	if err := http.ListenAndServe(fmt.Sprintf(":%d", AppPort), nil); err != nil {
 		slog.Error("server stopped", "error", err)
