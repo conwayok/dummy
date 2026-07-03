@@ -15,15 +15,20 @@ import (
 var AppName = "default-name"
 var AppPort = 9999
 
+type Code string
+
 const (
-	Ok                         string = "ok"
-	HeaderInvalid              string = "header_invalid"
+	CodeOk            Code = "ok"
+	CodeHeaderInvalid      = "header_invalid"
+)
+
+const (
 	DummyResponseCodeHeaderKey string = "X-Dummy-Response-Code"
 	DummySleepHeaderKey        string = "X-Dummy-Sleep"
 )
 
 type DummyResponse struct {
-	Code              string                 `json:"code"`
+	Code              Code                   `json:"code"`
 	Message           string                 `json:"message"`
 	HostName          string                 `json:"host_name"`
 	AppName           string                 `json:"app_name"`
@@ -68,7 +73,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	res := DummyResponse{
-		Code:              Ok,
+		Code:              CodeOk,
 		Message:           "success",
 		UnixTsMs:          time.Now().UnixMilli(),
 		HostName:          hostname,
@@ -86,7 +91,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		if parsed, err := strconv.Atoi(responseCodeOption); err == nil && parsed >= 100 && parsed <= 599 {
 			responseCode = parsed
 		} else {
-			res.Code = HeaderInvalid
+			res.Code = CodeHeaderInvalid
 			res.Message = fmt.Sprintf("%s header invalid", DummyResponseCodeHeaderKey)
 		}
 	}
@@ -95,7 +100,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		if parsed, err := strconv.Atoi(sleepOption); err == nil && parsed > 0 {
 			time.Sleep(time.Duration(parsed) * time.Millisecond)
 		} else {
-			res.Code = HeaderInvalid
+			res.Code = CodeHeaderInvalid
 			res.Message = fmt.Sprintf("%s header invalid", DummySleepHeaderKey)
 		}
 	}
