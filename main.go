@@ -4,13 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
 	"strconv"
 	"time"
-
-	log "github.com/sirupsen/logrus"
 )
 
 var AppName = "default-name"
@@ -43,15 +42,10 @@ type NetworkInterfaceInfo struct {
 }
 
 func init() {
-	_ = os.MkdirAll("logs", 0755)
-	logFileHandler, err := os.OpenFile("logs/dummy.log", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0755)
-	if err != nil {
-		fmt.Printf("error %s", err)
-	}
-	log.SetFormatter(&log.JSONFormatter{})
-	mw := io.MultiWriter(os.Stdout, logFileHandler)
-	log.SetOutput(mw)
-	log.SetLevel(log.InfoLevel)
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	}))
+	slog.SetDefault(logger)
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
@@ -106,7 +100,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	log.WithFields(log.Fields{"json": &res}).Info("received request")
+	slog.Info("received request", "data", res)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(responseCode)
@@ -122,14 +116,17 @@ func main() {
 		if port, err := strconv.Atoi(configuredPort); err == nil && port > 0 && port <= 65535 {
 			AppPort = port
 		} else {
-			log.Fatal("port out of range")
+			slog.Error("configured port out of range")
+			os.Exit(1)
 		}
 	}
 
 	http.HandleFunc("/", handler)
 
-	log.Infof("Starting server on :%d", AppPort)
+	slog.Info("server started", "port", AppPort)
+
 	if err := http.ListenAndServe(fmt.Sprintf(":%d", AppPort), nil); err != nil {
-		log.Fatal(err)
+		slog.Error("server stopped", "error", err)
+		os.Exit(1)
 	}
 }
