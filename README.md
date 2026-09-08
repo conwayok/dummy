@@ -5,7 +5,7 @@ This is a web app that can be used as a "dummy" service, which is useful for tes
 ### Run with Docker:
 
 ```console
-docker run --rm -d -p 9999:9999 -e DUMMY_SAFE_MODE=false conwayok/dummy:latest
+docker run --rm -d -p 9999:9999 -e DUMMY_SAFE_MODE=false ghcr.io/conwayok/dummy:latest
 ```
 
 ---
